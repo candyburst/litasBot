@@ -1,8 +1,24 @@
-import log from "./utils/logger.js"
-import bedduSalama from "./utils/banner.js"
-import { delay, readAccountsFromFile, readFile } from './utils/helper.js';
+import log from "./utils/logger.js";
+import bedduSalama from "./utils/banner.js";
+import axios from 'axios';
+import { delay, readAccountsFromFile } from './utils/helper.js';
 import { claimMining, getNewToken, getUserFarm, activateMining } from './utils/api.js';
 import fs from 'fs/promises';
+
+const PROXY_LIST_URL = "https://raw.githubusercontent.com/monosans/proxy-list/refs/heads/main/proxies/all.txt";
+
+async function fetchProxies() {
+    try {
+        log.info('Fetching proxy list from the URL...');
+        const response = await axios.get(PROXY_LIST_URL);
+        const proxies = response.data.split('\n').filter(Boolean);
+        log.info(`Fetched ${proxies.length} proxies.`);
+        return proxies;
+    } catch (error) {
+        log.error('Failed to fetch proxies:', error.message);
+        return []; // Return an empty array if fetching fails
+    }
+}
 
 async function refreshAccessToken(token, refreshToken, proxy) {
     let refresh;
@@ -11,7 +27,7 @@ async function refreshAccessToken(token, refreshToken, proxy) {
         if (!refresh) log.info('Token refresh failed, retrying...');
         await delay(3);
     } while (!refresh);
-    log.info('Token refreshed succesfully', refresh);
+    log.info('Token refreshed successfully', refresh);
     return refresh;
 }
 
@@ -67,16 +83,16 @@ async function handleFarming(userFarmInfo, token, refreshToken, proxy) {
         } while (!claimResponse);
 
         log.info('Farming rewards claimed response:', claimResponse);
-        await activateMiningProcess(token, refreshToken, proxy)
+        await activateMiningProcess(token, refreshToken, proxy);
     } else {
-        log.info('Farming rewards can be claimed at:', new Date(canBeClaimedAt).toLocaleString())
+        log.info('Farming rewards can be claimed at:', new Date(canBeClaimedAt).toLocaleString());
     }
 }
 
 async function main() {
     log.info(bedduSalama);
     let accounts = await readAccountsFromFile("tokens.txt");
-    const proxies = await readFile("proxy.txt");
+    const proxies = await fetchProxies();
 
     if (accounts.length === 0) {
         log.warn('No tokens found, exiting...');
@@ -84,8 +100,9 @@ async function main() {
     } else {
         log.info('Running with total Accounts:', accounts.length);
     }
+
     if (proxies.length === 0) {
-        log.warn('No proxy found, running without proxy...');
+        log.warn('No proxies found, running without proxy...');
     }
 
     while (true) {
